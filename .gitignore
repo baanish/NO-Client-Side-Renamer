@@ -48,6 +48,9 @@ CodeCoverage/
 [Tt]est[Rr]esult*/
 [Bb]uild[Ll]og.*
 
+# Machine-local Nuclear Option path
+Directory.Build.local.props
+
 # NUnit
 *.VisualState.xml
 TestResult.xml

@@ -1,0 +1,12 @@
+<Project>
+  <Import
+    Project="$(MSBuildThisFileDirectory)Directory.Build.local.props"
+    Condition="Exists('$(MSBuildThisFileDirectory)Directory.Build.local.props')"
+  />
+
+  <PropertyGroup Condition="'$(GamePath)' != ''">
+    <GamePath>$(GamePath.Trim().TrimEnd('/').TrimEnd('\'))</GamePath>
+    <GameManagedPath>$(GamePath)/NuclearOption_Data/Managed</GameManagedPath>
+    <BepInExCorePath>$(GamePath)/BepInEx/core</BepInExCorePath>
+  </PropertyGroup>
+</Project>
