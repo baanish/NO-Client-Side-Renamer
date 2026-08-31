@@ -12,7 +12,11 @@ internal sealed class AliasEditor
     private ulong _loadedInputSteamId;
     private string _loadedInputSteamName = string.Empty;
     private string _aliasInput = string.Empty;
-    private bool _dropdownOpen;
+    private string _playerSearch = string.Empty;
+    private Vector2 _playerScroll;
+
+    private const float PlayerRowHeight = 22f;
+    private const float PlayerListHeight = PlayerPicker.MaxVisibleRows * (PlayerRowHeight + 2f);
 
     public AliasEditor(Plugin plugin)
     {
@@ -60,65 +64,107 @@ internal sealed class AliasEditor
 
         var players = UnitRegistry.playerLookup.Values
             .Where(player => player != null && player.SteamID != 0)
-            .GroupBy(player => player.SteamID)
-            .Select(group => group.First())
-            .OrderBy(player => player.PlayerIndex)
             .ToArray();
 
-        if (players.Length == 0)
+        var candidates = players
+            .Select((player, sourceIndex) => new PlayerPickerCandidate(
+                sourceIndex,
+                player.SteamID,
+                player.PlayerIndex,
+                OriginalNameCache.GetOrRequest(player)))
+            .ToArray();
+        var options = PlayerPicker.Normalize(candidates);
+
+        if (options.Length == 0)
         {
+            ClearPlayerSelection();
             GUILayout.Label("No players are loaded in the current match.");
             return;
         }
 
-        var selectedPlayer = SelectAvailablePlayer(players);
+        var selectedPlayer = SelectAvailablePlayer(players, options);
 
         GUILayout.Space(6f);
-        GUILayout.Label($"Current match: {players.Length} player{(players.Length == 1 ? string.Empty : "s")}");
-        DrawPlayerDropdown(players, selectedPlayer);
+        GUILayout.Label($"Current match: {options.Length} player{(options.Length == 1 ? string.Empty : "s")}");
+        selectedPlayer = DrawPlayerList(players, options, selectedPlayer);
         DrawPlayerEditor(selectedPlayer);
     }
 
-    private Player SelectAvailablePlayer(Player[] players)
+    private Player SelectAvailablePlayer(Player[] players, PlayerPickerOption[] options)
     {
-        var selectedPlayer = players.FirstOrDefault(player => player.SteamID == _selectedSteamId);
-        if (selectedPlayer != null)
+        var selectedIndex = PlayerPicker.ResolveSelectionIndex(options, _selectedSteamId);
+        var option = options[selectedIndex];
+        if (option.SteamId != _selectedSteamId)
         {
-            return selectedPlayer;
-        }
-
-        _selectedSteamId = players[0].SteamID;
-        _loadedInputSteamId = 0;
-        _loadedInputSteamName = string.Empty;
-        _dropdownOpen = false;
-        return players[0];
-    }
-
-    private void DrawPlayerDropdown(Player[] players, Player selectedPlayer)
-    {
-        GUILayout.Label("Player");
-        if (GUILayout.Button(GetPlayerLabel(selectedPlayer), GUILayout.ExpandWidth(true)))
-        {
-            _dropdownOpen = !_dropdownOpen;
-        }
-
-        if (!_dropdownOpen)
-        {
-            return;
-        }
-
-        foreach (var player in players)
-        {
-            if (!GUILayout.Button(GetPlayerLabel(player), GUILayout.ExpandWidth(true)))
-            {
-                continue;
-            }
-
-            _selectedSteamId = player.SteamID;
+            _selectedSteamId = option.SteamId;
             _loadedInputSteamId = 0;
             _loadedInputSteamName = string.Empty;
-            _dropdownOpen = false;
+            _playerScroll = Vector2.zero;
         }
+
+        return players[option.SourceIndex];
+    }
+
+    private Player DrawPlayerList(
+        Player[] players,
+        PlayerPickerOption[] options,
+        Player selectedPlayer)
+    {
+        GUILayout.Label("Players");
+        GUILayout.BeginHorizontal();
+        GUILayout.Label("Search", GUILayout.Width(48f));
+        var nextSearch = GUILayout.TextField(_playerSearch ?? string.Empty, GUILayout.ExpandWidth(true));
+        if (!string.Equals(nextSearch, _playerSearch, StringComparison.Ordinal))
+        {
+            _playerSearch = nextSearch;
+            _playerScroll = Vector2.zero;
+        }
+
+        if (GUILayout.Button("Clear", GUILayout.Width(48f)) && !string.IsNullOrEmpty(_playerSearch))
+        {
+            _playerSearch = string.Empty;
+            _playerScroll = Vector2.zero;
+        }
+        GUILayout.EndHorizontal();
+
+        var matches = PlayerPicker.Filter(options, _playerSearch);
+        GUILayout.Label($"Showing {matches.Length} of {options.Length} players");
+
+        GUILayout.BeginVertical(GUI.skin.box);
+        _playerScroll = GUILayout.BeginScrollView(
+            _playerScroll,
+            false,
+            true,
+            GUILayout.Height(PlayerListHeight));
+
+        if (matches.Length == 0)
+        {
+            GUILayout.Label("No players match this search.");
+        }
+        else
+        {
+            foreach (var option in matches)
+            {
+                var prefix = option.SteamId == _selectedSteamId ? "Selected: " : string.Empty;
+                var content = new GUIContent(prefix + option.VisibleLabel, option.FullLabel);
+                if (!GUILayout.Button(
+                    content,
+                    GUILayout.ExpandWidth(true),
+                    GUILayout.Height(PlayerRowHeight)))
+                {
+                    continue;
+                }
+
+                _selectedSteamId = option.SteamId;
+                _loadedInputSteamId = 0;
+                _loadedInputSteamName = string.Empty;
+                selectedPlayer = players[option.SourceIndex];
+            }
+        }
+
+        GUILayout.EndScrollView();
+        GUILayout.EndVertical();
+        return selectedPlayer;
     }
 
     private void DrawPlayerEditor(Player player)
@@ -156,14 +202,12 @@ internal sealed class AliasEditor
         GUILayout.EndHorizontal();
     }
 
-    private static string GetPlayerLabel(Player player)
+    private void ClearPlayerSelection()
     {
-        var name = OriginalNameCache.GetOrRequest(player);
-        if (string.IsNullOrEmpty(name))
-        {
-            name = "[name pending]";
-        }
-
-        return $"{name} [{player.SteamID % 10000:D4}]";
+        _selectedSteamId = 0;
+        _loadedInputSteamId = 0;
+        _loadedInputSteamName = string.Empty;
+        _playerSearch = string.Empty;
+        _playerScroll = Vector2.zero;
     }
 }

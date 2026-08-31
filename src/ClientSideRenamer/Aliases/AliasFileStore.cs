@@ -39,7 +39,7 @@ public sealed class AliasFileStore
         {
             if (!File.Exists(_filePath))
             {
-                created = TryCreateInitialFile();
+                created = TryCreateMissingFile();
             }
 
             var json = File.ReadAllText(_filePath, Encoding.UTF8);
@@ -107,14 +107,12 @@ public sealed class AliasFileStore
         }
     }
 
-    private bool TryCreateInitialFile()
+    private bool TryCreateMissingFile()
     {
-        var directory = Path.GetDirectoryName(_filePath)!;
-        Directory.CreateDirectory(directory);
-
         try
         {
-            WriteDocumentAtomic(AliasFileDocument.CreateInitialTemplate(), replaceExisting: false);
+            var document = _document?.Copy() ?? AliasFileDocument.CreateInitialTemplate();
+            WriteDocumentAtomic(document, replaceExisting: false);
             return true;
         }
         catch (IOException) when (File.Exists(_filePath))

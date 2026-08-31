@@ -1,6 +1,6 @@
 # User guide
 
-This guide covers Nuclear Option Client-Side Renamer v0.1.0. The mod is intended for the controlled two-person test only. Vanilla-peer isolation has not passed in either join direction. See [Testing](TESTING.md).
+This guide covers Nuclear Option Client-Side Renamer v0.1.1. The mod is intended for controlled testing only. Vanilla-peer isolation has not passed in either join direction. See [Testing](TESTING.md).
 
 ## Requirements
 
@@ -31,7 +31,7 @@ BepInEx/
       ClientSideRenamer.dll
 ```
 
-The generated alias file contains a disabled example and the private v0.1.0 test row:
+The generated alias file contains two disabled examples. It does not activate an alias:
 
 ```json
 {
@@ -40,28 +40,26 @@ The generated alias file contains a disabled example and the private v0.1.0 test
     {
       "enabled": false,
       "steamId": "",
-      "steamName": "Example",
-      "displayName": "Example | Callsign"
+      "steamName": "ExamplePilot",
+      "displayName": "ExamplePilot | Viper 1-1"
     },
     {
-      "enabled": true,
+      "enabled": false,
       "steamId": "",
-      "steamName": "Baanish",
-      "displayName": "Baanish | Reaper 5-2"
+      "steamName": "AnotherPilot",
+      "displayName": "AnotherPilot | Falcon 2-3"
     }
   ]
 }
 ```
-
-Remove the personal test row before distributing a build.
 
 ## Add or change an alias in F1
 
 1. Enter a match with the target player.
 2. Open BepInEx Configuration Manager. Its default key is `F1`.
 3. Expand **Nuclear Option Client-Side Renamer**.
-4. Open the **Player** dropdown under **Current match**.
-5. Select the target player. The four digits in brackets are the last four digits of the player's SteamID64.
+4. Find the player in the scrollable **Players** list under **Current match**. In a large lobby, enter part of the original name or SteamID64 in **Search**.
+5. Select the target player's row. The four digits in brackets are the last four digits of the player's SteamID64.
 6. Enter the preferred display name in **Alias**.
 7. Select **Save**.
 
@@ -76,7 +74,7 @@ Saving does the following:
 
 Select **Remove** to delete both the player's SteamID64 entry and an exact name-only fallback for that player. Select **Reload now** to read the file immediately.
 
-The dropdown reads nonzero-SteamID players from the active game registry. It does not populate from the main menu or Steam lobby browser. Spectator coverage has not been verified, and zero-ID entries such as a dedicated-server identity are excluded.
+The list reads nonzero-SteamID players from the active game registry. Its viewport stays eight rows tall and scrolls when more players match. Search is case-insensitive and matches the original name or full SteamID64. The list does not populate from the main menu or Steam lobby browser. Spectator coverage has not been verified, and zero-ID entries such as a dedicated-server identity are excluded.
 
 ## Edit the JSON file directly
 
@@ -87,11 +85,11 @@ Each object in `players` has four required fields:
 | `enabled` | Applies the entry when `true`. Disabled rows are retained but do not rename a player. |
 | `steamId` | Canonical public individual SteamID64. Leave blank only for a temporary name fallback. |
 | `steamName` | Original Steam persona name. Required when `steamId` is blank and retained as context on ID entries. |
-| `displayName` | Display alias. It must contain a non-whitespace character. v0.1.0 does not impose a length or character limit. |
+| `displayName` | Display alias. It must contain a non-whitespace character. v0.1.1 does not impose a length or character limit. |
 
 `schemaVersion` must be `1`.
 
-SteamID64 matching takes priority. An entry with a populated `steamId` matches only that ID and never falls back to `steamName`. A blank `steamId` enables an exact, case-sensitive `steamName` match. For example, `Baanish` and `baanish` are different fallback names.
+SteamID64 matching takes priority. An entry with a populated `steamId` matches only that ID and never falls back to `steamName`. A blank `steamId` enables an exact, case-sensitive `steamName` match. For example, `ExamplePilot` and `examplepilot` are different fallback names.
 
 Use name-only rows only to bootstrap a test. When one matches, the plugin logs the resolved SteamID64. Saving the player in F1 upgrades the row to that stable ID.
 
@@ -127,6 +125,10 @@ Changing `Aliases.File` rebinds the store and watcher on the Unity update thread
 
 File-system callbacks do not parse JSON or touch game objects. They schedule work, and the plugin reloads the file on the Unity update thread after a 300 ms debounce. File-system notifications are best effort, so use **Reload now** when an external edit does not appear.
 
+If the alias file is deleted after a successful load, the plugin recreates it from the last valid in-memory document. If there is no valid document yet, it creates the disabled generic template. Recreated files preserve the parsed alias data, but not the original whitespace or formatting.
+
+If the configured directory cannot be watched, the plugin keeps the loaded aliases and manual reload available. It reports the watcher error in F1 and `BepInEx/LogOutput.log`. Create or correct the directory, then toggle `ReloadOnChange` off and on to retry.
+
 After a successful reload, the plugin clears the game's shared player-name cache, resets each loaded player's cached name, and invokes the game's existing persona-state refresh path. Existing displays should update without reconnecting, but text already captured by an event notification is not rewritten.
 
 If a reload finds malformed JSON or an invalid document, the plugin:
@@ -140,7 +142,8 @@ Fix the file, save it, and wait for automatic reload or select **Reload now**. T
 
 ## Known limits
 
-- Vanilla-peer isolation is unproven when joining and hosting. Do not use v0.1.0 for ordinary multiplayer.
+- Vanilla-peer isolation is unproven when joining and hosting. Do not use v0.1.1 for ordinary multiplayer.
+- Aliases may appear in host-local logs, ban-list labels, and local third-party recordings. This does not by itself mean a vanilla peer received the alias.
 - Lobby-browser titles are not renamed.
 - The F1 roster excludes zero-ID entries, and spectator coverage is unverified.
 - Text formatted before a reload or disable action is not rewritten.
@@ -148,15 +151,11 @@ Fix the file, save it, and wait for automatic reload or select **Reload now**. T
 
 ## Troubleshooting
 
-### The generated Baanish row does not match
-
-Name-only matching is exact and case-sensitive. If Steam reports `baanish`, the generated `Baanish` row will not match. Select the player in F1 and save the alias to create a SteamID64 entry, or correct the case in `aliases.json`.
-
 ### The F1 editor is missing
 
 Install BepInEx Configuration Manager. The renamer itself should still load without it, and direct JSON editing remains available.
 
-### No players appear in the dropdown
+### No players appear in the list
 
 Join a match and reopen the plugin section. The editor reads the active player registry and does not populate from the main menu or lobby browser.
 

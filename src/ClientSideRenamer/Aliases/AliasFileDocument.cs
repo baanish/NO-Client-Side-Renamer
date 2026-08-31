@@ -23,15 +23,15 @@ public sealed class AliasFileDocument
                 {
                     Enabled = false,
                     SteamId = string.Empty,
-                    SteamName = "Example",
-                    DisplayName = "Example | Callsign"
+                    SteamName = "ExamplePilot",
+                    DisplayName = "ExamplePilot | Viper 1-1"
                 },
                 new()
                 {
-                    Enabled = true,
+                    Enabled = false,
                     SteamId = string.Empty,
-                    SteamName = "Baanish",
-                    DisplayName = "Baanish | Reaper 5-2"
+                    SteamName = "AnotherPilot",
+                    DisplayName = "AnotherPilot | Falcon 2-3"
                 }
             }
         };

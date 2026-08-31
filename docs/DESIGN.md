@@ -1,6 +1,6 @@
 # Design and constraints
 
-This document records the v0.1.0 design for reviewers. It separates accepted implementation decisions from inferred rationale, provisional behavior, and release gates.
+This document records the v0.1.1 design for reviewers. It separates accepted implementation decisions from inferred rationale, provisional behavior, and release gates.
 
 ## Goals
 
@@ -11,7 +11,7 @@ This document records the v0.1.0 design for reviewers. It separates accepted imp
 - Preserve the last valid mapping when an edit is malformed.
 - Refresh existing cache-aware displays without reconnecting.
 
-## Non-goals for v0.1.0
+## Non-goals for v0.1.1
 
 - Changing Steam authentication, Steam persona names, or synced player IDs.
 - Synchronizing aliases between modded clients.
@@ -37,7 +37,7 @@ The plugin changes one resolved name and leaves downstream UI composition to the
 
 ## Decision: patch the central Steam-name resolver
 
-**Status:** accepted for v0.1.0, with a host-mode release gate.
+**Status:** accepted for v0.1.1, with a host-mode release gate.
 
 [PlayerNamePatch.cs](../src/ClientSideRenamer/PlayerNamePatch.cs) adds a Harmony postfix to the game's private static `Player.TryGetNameFromSteam(CSteamID, out string)`. It remembers the unmodified Steam name, then replaces the out value when an alias resolves.
 
@@ -45,7 +45,7 @@ The implementation shape indicates that this level was chosen to cover multiple 
 
 The tradeoff is process-wide scope. When a player hosts, client and server behavior run in the same process. A server-formatted outbound string could therefore observe the alias. The implementation does not modify network identity fields, but that alone does not prove that every outbound message carries the original name.
 
-**Release contract:** a vanilla peer must always see the original Steam name in both join directions. Any alias visible on the vanilla peer or in server-side output fails host-mode support.
+**Release contract:** a vanilla peer must always see the original Steam name in both join directions. Any alias visible on the vanilla peer or in network-visible server output fails host-mode support. Host-local logs, ban-list labels, and local third-party recordings may contain an alias because they run after the central resolver; that does not by itself prove network propagation.
 
 ## Decision: prefer SteamID64 and isolate name fallback
 
@@ -73,6 +73,8 @@ The validator requires a nonblank alias but sets no length or character policy. 
 
 [AliasFileStore.cs](../src/ClientSideRenamer/Aliases/AliasFileStore.cs) separates the file on disk from the active snapshot. After one successful load, a malformed or invalid reload leaves the active snapshot unchanged. If the first load is invalid, no aliases are active. The invalid file is preserved for repair.
 
+If the file or its parent directory is deleted, the store recreates it from the last valid parsed document. Before any valid load, it creates a template with disabled examples. Recreation preserves alias values but not the deleted file's original formatting or ignored properties.
+
 The F1 editor refuses to save while the disk copy is invalid. It validates the disk again immediately before saving so that it does not overwrite a malformed external edit made since the last reload.
 
 Successful saves serialize to a uniquely named temporary file in the destination directory, flush it to disk, and replace or move it into place. Tests cover the successful replacement path and confirm that it leaves no temporary file. They do not prove filesystem-level atomicity or crash consistency on every filesystem.
@@ -87,7 +89,7 @@ One known concurrency limit remains: a valid external edit made between the edit
 
 The implementation keeps JSON and Unity object work off the `FileSystemWatcher` callback thread. Configuration changes for the file path and watcher setting are also deferred to `Update`.
 
-File watching remains best effort. The debounce runs only after an event is observed, so manual reload is the recovery path for a missed notification.
+File watching remains best effort. The debounce runs only after an event is observed, so manual reload is the recovery path for a missed notification. A missing or inaccessible directory is reported in F1 and the log without throwing through `Update`; loaded aliases and manual reload remain available.
 
 ## Decision: refresh through the game's existing name path
 
@@ -115,15 +117,17 @@ The plugin declares BepInEx Configuration Manager as a soft dependency. [Configu
 
 Without Configuration Manager, the alias resolver, JSON file, watcher, and behavior settings still work. Only the custom editor is unavailable. The generated config contains an empty `[Alias editor] Editor` string entry that exists only to host the reflective drawer; changing its text has no effect.
 
-## Decision: use one dropdown and one editor
+## Decision: use one bounded player list and one editor
 
 **Status:** accepted for the active registry.
 
-[AliasEditor.cs](../src/ClientSideRenamer/AliasEditor.cs) reads `UnitRegistry.playerLookup.Values`, removes null and zero-ID entries, deduplicates by SteamID64, and orders players by `PlayerIndex`. A single dropdown selects one player and a single text field edits that selection.
+[AliasEditor.cs](../src/ClientSideRenamer/AliasEditor.cs) reads `UnitRegistry.playerLookup.Values` and maps the live roster into [PlayerPicker.cs](../src/ClientSideRenamer/PlayerPicker.cs). The picker removes zero-ID entries, deduplicates by SteamID64, and orders players by `PlayerIndex` with stable tie-breakers.
 
-The selection is stored as SteamID64 rather than list position. Labels include the original Steam name and the last four ID digits to distinguish similar names without filling the panel with full IDs. The full SteamID64 remains visible below the dropdown.
+The editor draws the roster as NMG-style button rows inside a nested scroll box. The box stays eight rows tall even when the registry contains 100 players. Search matches the original name or full SteamID64 without changing roster order.
 
-A repeated editor block per player was rejected because it scales poorly with match size and makes it easy to edit the wrong row after roster changes.
+The selection is stored as SteamID64 rather than list position. The selected row is marked in the list. Labels include the original Steam name and the last four ID digits. Long names are shortened without splitting a Unicode text element, while the full name remains in the tooltip and search index. The full SteamID64 also remains visible below the list.
+
+A repeated editor block per player and an unbounded dropdown were rejected because both scale poorly with match size. The single selected-player editor stays below the roster list and reloads when the selected SteamID64 changes.
 
 This is not a Steam-lobby roster. Lobby-only participants do not appear, zero-ID entries are excluded, and spectator coverage remains unverified.
 
@@ -150,11 +154,10 @@ These are compatibility seams, not guaranteed public APIs. A game or loader upda
 ## Questions for review
 
 1. Is the central resolver hook acceptable if both two-person isolation directions pass, or should host mode remain disabled by policy?
-2. Should the distributable template remove the enabled personal `Baanish` fallback and contain disabled examples only?
-3. Is unrestricted alias length acceptable for v0.1.0, or should the schema pin a display-safe limit?
-4. Is overwriting a newer but valid external file acceptable, or should F1 saves use revision detection?
-5. Should the alias path be confined to `BepInEx/config`, or is the current explicit-path flexibility intentional?
-6. Should spectators be added before a public test, or remain an unverified registry case?
-7. Which name-consuming surfaces are release requirements beyond those already observed?
+2. Is unrestricted alias length acceptable for v0.1.1, or should the schema pin a display-safe limit?
+3. Is overwriting a newer but valid external file acceptable, or should F1 saves use revision detection?
+4. Should the alias path be confined to `BepInEx/config`, or is the current explicit-path flexibility intentional?
+5. Should spectators be added before a public test, or remain an unverified registry case?
+6. Which name-consuming surfaces are release requirements beyond those already observed?
 
 See [Testing](TESTING.md) for the evidence and acceptance criteria behind these questions.

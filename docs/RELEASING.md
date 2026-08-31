@@ -16,8 +16,8 @@ The script writes these ignored artifacts:
 
 ```text
 artifacts/
-  ClientSideRenamer-v0.1.0-nomm.zip
-  ClientSideRenamer-v0.1.0-plugin-only.zip
+  ClientSideRenamer-v0.1.1-nomm.zip
+  ClientSideRenamer-v0.1.1-plugin-only.zip
   SHA256SUMS.txt
 ```
 
@@ -41,10 +41,10 @@ Neither archive contains game assemblies, BepInEx, Configuration Manager, genera
 
 ## Publish the GitHub prerelease
 
-Review the source diff and [release notes](release-notes/v0.1.0.md) before committing. Build the packages from that clean commit. Create the annotated `v0.1.0` tag only after build, test, and package validation pass. Push the commit and tag, then publish a GitHub prerelease with these assets in this order:
+Review the source diff and [release notes](release-notes/v0.1.1.md) before committing. Build the packages from that clean commit. Create the annotated `v0.1.1` tag only after build, test, and package validation pass. Push the commit and tag, then publish a GitHub prerelease with these assets in this order:
 
-1. `ClientSideRenamer-v0.1.0-nomm.zip`
-2. `ClientSideRenamer-v0.1.0-plugin-only.zip`
+1. `ClientSideRenamer-v0.1.1-nomm.zip`
+2. `ClientSideRenamer-v0.1.1-plugin-only.zip`
 3. `SHA256SUMS.txt`
 
 The NOMM archive must be the first uploaded asset because the registry uses the first release asset as the default package when a release contains several assets.
@@ -66,15 +66,14 @@ The [manifest schema](https://github.com/KopterBuzz/NOMNOM/blob/main/SCHEMA.md) 
 | `autoUpdateArtifacts` | `True` |
 | artifact `type` | `plugin` |
 | artifact `category` | `preRelease` until the isolation gate passes |
-| artifact `fileName` | `ClientSideRenamer-v0.1.0-nomm.zip` |
+| artifact `fileName` | `ClientSideRenamer-v0.1.1-nomm.zip` |
 | artifact `gameVersion` | `0.34.2` for this test build |
 
 Do not submit the manifest while the repository is private. Before submission:
 
 1. Pass both vanilla-peer isolation directions in [Testing](TESTING.md).
-2. Remove the enabled personal starter mapping from the generated template.
-3. Make the source and matching release commit public.
-4. Confirm the GitHub release asset is built from that public source.
-5. Fork NOMNOM, add `modManifests/ClientSideRenamer.json`, and open a pull request to its `main` branch.
+2. Make the source and matching release commit public.
+3. Confirm the GitHub release asset is built from that public source.
+4. Fork NOMNOM, add `modManifests/ClientSideRenamer.json`, and open a pull request to its `main` branch.
 
 NOMNOM supports a prerelease category, but its `isClientOrServer` value still makes a behavior claim. Set it to `Client` only after the host-direction isolation test passes.

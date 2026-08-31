@@ -6,7 +6,7 @@
     <RootNamespace>ClientSideRenamer</RootNamespace>
     <AssemblyName>ClientSideRenamer</AssemblyName>
     <Product>Nuclear Option Client-Side Renamer</Product>
-    <Version>0.1.0</Version>
+    <Version>0.1.1</Version>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);1591</NoWarn>
     <MSBuildWarningsAsMessages>$(MSBuildWarningsAsMessages);MSB3277</MSBuildWarningsAsMessages>

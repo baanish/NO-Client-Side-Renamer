@@ -9,34 +9,61 @@ internal sealed class ReloadWatcher : IDisposable
     private DateTime _reloadAfterUtc;
     private bool _reloadPending;
 
-    public void Bind(string filePath, bool enabled)
+    public bool TryBind(string filePath, bool enabled, out string error)
     {
-        DisposeWatcher();
-        ClearPending();
-
-        if (!enabled)
+        try
         {
-            return;
+            DisposeWatcher();
+            ClearPending();
+
+            if (!enabled)
+            {
+                error = string.Empty;
+                return true;
+            }
+
+            var directory = Path.GetDirectoryName(filePath);
+            var fileName = Path.GetFileName(filePath);
+            if (string.IsNullOrEmpty(directory) || string.IsNullOrEmpty(fileName))
+            {
+                error = "The alias file path must include a directory and file name.";
+                return false;
+            }
+
+            var watcher = new FileSystemWatcher(directory, fileName)
+            {
+                IncludeSubdirectories = false,
+                NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite | NotifyFilters.Size,
+            };
+
+            try
+            {
+                watcher.Changed += OnChanged;
+                watcher.Created += OnChanged;
+                watcher.Deleted += OnChanged;
+                watcher.Renamed += OnRenamed;
+                watcher.EnableRaisingEvents = true;
+                _watcher = watcher;
+            }
+            catch
+            {
+                watcher.Dispose();
+                throw;
+            }
+
+            error = string.Empty;
+            return true;
         }
-
-        var directory = Path.GetDirectoryName(filePath);
-        var fileName = Path.GetFileName(filePath);
-        if (string.IsNullOrEmpty(directory) || string.IsNullOrEmpty(fileName))
+        catch (Exception exception) when (
+            exception is ArgumentException
+                or IOException
+                or UnauthorizedAccessException)
         {
-            return;
+            DisposeWatcher();
+            ClearPending();
+            error = exception.Message;
+            return false;
         }
-
-        _watcher = new FileSystemWatcher(directory, fileName)
-        {
-            IncludeSubdirectories = false,
-            NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite | NotifyFilters.Size,
-        };
-
-        _watcher.Changed += OnChanged;
-        _watcher.Created += OnChanged;
-        _watcher.Deleted += OnChanged;
-        _watcher.Renamed += OnRenamed;
-        _watcher.EnableRaisingEvents = true;
     }
 
     public bool Poll()

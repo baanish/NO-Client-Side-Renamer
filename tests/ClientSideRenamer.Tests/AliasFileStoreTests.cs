@@ -20,9 +20,22 @@ public sealed class AliasFileStoreTests
         Assert.True(result.Succeeded);
         Assert.True(result.CreatedFile);
         Assert.True(File.Exists(path));
-        Assert.True(store.Current.TryResolve(string.Empty, "Baanish", out var alias));
-        Assert.Equal("Baanish | Reaper 5-2", alias);
-        Assert.False(store.Current.TryResolve(string.Empty, "Example", out _));
+        Assert.Equal(0, store.Current.Count);
+        var document = store.GetDocument();
+        Assert.Equal(2, document.Players.Count);
+        Assert.All(document.Players, player => Assert.False(player.Enabled));
+        Assert.Collection(
+            document.Players,
+            player =>
+            {
+                Assert.Equal("ExamplePilot", player.SteamName);
+                Assert.Equal("ExamplePilot | Viper 1-1", player.DisplayName);
+            },
+            player =>
+            {
+                Assert.Equal("AnotherPilot", player.SteamName);
+                Assert.Equal("AnotherPilot | Falcon 2-3", player.DisplayName);
+            });
     }
 
     [Fact]
@@ -50,10 +63,10 @@ public sealed class AliasFileStoreTests
         var store = CreateLoadedStore(temp);
         var document = store.GetDocument();
 
-        document.Players.Single(player => player.SteamName == "Baanish").DisplayName = "Unsaved";
+        document.Players.Single(player => player.SteamName == "PilotOne").DisplayName = "Unsaved";
 
-        Assert.True(store.Current.TryResolve(string.Empty, "Baanish", out var alias));
-        Assert.Equal("Baanish | Reaper 5-2", alias);
+        Assert.True(store.Current.TryResolve(string.Empty, "PilotOne", out var alias));
+        Assert.Equal("Pilot One | Viper 1-1", alias);
         Assert.DoesNotContain("Unsaved", File.ReadAllText(store.FilePath));
     }
 
@@ -64,12 +77,12 @@ public sealed class AliasFileStoreTests
         var store = CreateLoadedStore(temp);
         var document = store.GetDocument();
         document.Players.Clear();
-        document.Players.Add(Entry("76561198000000001", "Baanish", "Reaper"));
+        document.Players.Add(Entry("76561198000000001", "PilotOne", "Viper"));
         Assert.True(store.Save(document).Succeeded);
 
         Assert.True(store.Current.TryResolve("76561198000000001", "Someone Else", out var alias));
-        Assert.Equal("Reaper", alias);
-        Assert.False(store.Current.TryResolve("76561198000000002", "Baanish", out _));
+        Assert.Equal("Viper", alias);
+        Assert.False(store.Current.TryResolve("76561198000000002", "PilotOne", out _));
     }
 
     [Fact]
@@ -78,8 +91,8 @@ public sealed class AliasFileStoreTests
         using var temp = new TemporaryDirectory();
         var store = CreateLoadedStore(temp);
 
-        Assert.True(store.Current.TryResolve("76561198000000001", "Baanish", out _));
-        Assert.False(store.Current.TryResolve("76561198000000001", "baanish", out _));
+        Assert.True(store.Current.TryResolve("76561198000000001", "PilotOne", out _));
+        Assert.False(store.Current.TryResolve("76561198000000001", "pilotone", out _));
     }
 
     [Theory]
@@ -105,10 +118,10 @@ public sealed class AliasFileStoreTests
                 document.Players.Add(Entry("76561198000000001", "Other", "Two", enabled: false));
                 break;
             case "duplicate-name":
-                document.Players.Add(Entry(string.Empty, "Baanish", "Two"));
+                document.Players.Add(Entry(string.Empty, "PilotOne", "Two"));
                 break;
             case "disabled-duplicate-name":
-                document.Players.Add(Entry(string.Empty, "Baanish", "Two", enabled: false));
+                document.Players.Add(Entry(string.Empty, "PilotOne", "Two", enabled: false));
                 break;
             case "invalid-id":
                 document.Players[0].SteamId = "not-an-id";
@@ -125,8 +138,8 @@ public sealed class AliasFileStoreTests
 
         Assert.False(result.Succeeded);
         Assert.True(store.IsDiskValid);
-        Assert.True(store.Current.TryResolve(string.Empty, "Baanish", out var alias));
-        Assert.Equal("Baanish | Reaper 5-2", alias);
+        Assert.True(store.Current.TryResolve(string.Empty, "PilotOne", out var alias));
+        Assert.Equal("Pilot One | Viper 1-1", alias);
     }
 
     [Fact]
@@ -141,7 +154,7 @@ public sealed class AliasFileStoreTests
         Assert.False(reload.Succeeded);
         Assert.True(reload.RetainedLastKnownGood);
         Assert.False(store.IsDiskValid);
-        Assert.True(store.Current.TryResolve(string.Empty, "Baanish", out _));
+        Assert.True(store.Current.TryResolve(string.Empty, "PilotOne", out _));
         Assert.False(store.Save(store.GetDocument()).Succeeded);
         Assert.Equal("{ broken", File.ReadAllText(store.FilePath));
     }
@@ -159,7 +172,7 @@ public sealed class AliasFileStoreTests
         Assert.True(reload.RetainedLastKnownGood);
         Assert.Contains("Unsupported schemaVersion", reload.Error);
         Assert.False(store.IsDiskValid);
-        Assert.True(store.Current.TryResolve(string.Empty, "Baanish", out _));
+        Assert.True(store.Current.TryResolve(string.Empty, "PilotOne", out _));
         Assert.False(store.Save(store.GetDocument()).Succeeded);
     }
 
@@ -189,7 +202,7 @@ public sealed class AliasFileStoreTests
         using var temp = new TemporaryDirectory();
         var store = CreateLoadedStore(temp);
         var document = store.GetDocument();
-        document.Players.Single(player => player.SteamName == "Baanish").DisplayName = "Changed";
+        document.Players.Single(player => player.SteamName == "PilotOne").DisplayName = "Changed";
         File.WriteAllText(store.FilePath, "[]");
 
         var result = store.Save(document);
@@ -197,8 +210,8 @@ public sealed class AliasFileStoreTests
         Assert.False(result.Succeeded);
         Assert.False(store.IsDiskValid);
         Assert.Equal("[]", File.ReadAllText(store.FilePath));
-        Assert.True(store.Current.TryResolve(string.Empty, "Baanish", out var alias));
-        Assert.Equal("Baanish | Reaper 5-2", alias);
+        Assert.True(store.Current.TryResolve(string.Empty, "PilotOne", out var alias));
+        Assert.Equal("Pilot One | Viper 1-1", alias);
     }
 
     [Fact]
@@ -216,10 +229,73 @@ public sealed class AliasFileStoreTests
         Assert.Empty(Directory.GetFiles(temp.Path, "*.tmp", SearchOption.AllDirectories));
     }
 
+    [Fact]
+    public void Reload_recreates_a_deleted_file_from_the_last_known_good_document()
+    {
+        using var temp = new TemporaryDirectory();
+        var store = CreateLoadedStore(temp);
+        File.Delete(store.FilePath);
+
+        var result = store.Reload();
+
+        Assert.True(result.Succeeded);
+        Assert.True(result.CreatedFile);
+        Assert.True(File.Exists(store.FilePath));
+        Assert.True(store.Current.TryResolve(string.Empty, "PilotOne", out var alias));
+        Assert.Equal("Pilot One | Viper 1-1", alias);
+        Assert.Contains("PilotOne", File.ReadAllText(store.FilePath));
+        Assert.DoesNotContain("ExamplePilot", File.ReadAllText(store.FilePath));
+        Assert.Empty(Directory.GetFiles(temp.Path, "*.tmp", SearchOption.AllDirectories));
+    }
+
+    [Fact]
+    public void Reload_recreates_a_deleted_malformed_file_from_the_last_known_good_document()
+    {
+        using var temp = new TemporaryDirectory();
+        var store = CreateLoadedStore(temp);
+        File.WriteAllText(store.FilePath, "{ broken");
+        Assert.False(store.Reload().Succeeded);
+        File.Delete(store.FilePath);
+
+        var result = store.Reload();
+
+        Assert.True(result.Succeeded);
+        Assert.True(result.CreatedFile);
+        Assert.True(store.Current.TryResolve(string.Empty, "PilotOne", out var alias));
+        Assert.Equal("Pilot One | Viper 1-1", alias);
+        Assert.Contains("PilotOne", File.ReadAllText(store.FilePath));
+    }
+
+    [Fact]
+    public void Reload_recreates_a_deleted_parent_directory_from_the_last_known_good_document()
+    {
+        using var temp = new TemporaryDirectory();
+        var path = Path.Combine(temp.Path, "nested", "aliases.json");
+        var store = new AliasFileStore(path);
+        Assert.True(store.Reload().Succeeded);
+        var document = store.GetDocument();
+        document.Players.Clear();
+        document.Players.Add(Entry(string.Empty, "PilotOne", "Pilot One | Viper 1-1"));
+        Assert.True(store.Save(document).Succeeded);
+        Directory.Delete(Path.GetDirectoryName(path)!, recursive: true);
+
+        var result = store.Reload();
+
+        Assert.True(result.Succeeded);
+        Assert.True(result.CreatedFile);
+        Assert.True(File.Exists(path));
+        Assert.True(store.Current.TryResolve(string.Empty, "PilotOne", out var alias));
+        Assert.Equal("Pilot One | Viper 1-1", alias);
+    }
+
     private static AliasFileStore CreateLoadedStore(TemporaryDirectory temp)
     {
         var store = new AliasFileStore(Path.Combine(temp.Path, "aliases.json"));
         Assert.True(store.Reload().Succeeded);
+        var document = store.GetDocument();
+        document.Players.Clear();
+        document.Players.Add(Entry(string.Empty, "PilotOne", "Pilot One | Viper 1-1"));
+        Assert.True(store.Save(document).Succeeded);
         return store;
     }
 
@@ -230,7 +306,7 @@ public sealed class AliasFileStoreTests
             Players =
             {
                 Entry("76561198000000001", "Original", "One"),
-                Entry(string.Empty, "Baanish", "Two")
+                Entry(string.Empty, "PilotOne", "Two")
             }
         };
     }

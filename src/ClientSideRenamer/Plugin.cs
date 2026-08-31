@@ -13,7 +13,7 @@ internal sealed class Plugin : BaseUnityPlugin
 {
     internal const string PluginGuid = "com.baanish.nuclearoption.clientsiderenamer";
     internal const string PluginName = "Nuclear Option Client-Side Renamer";
-    internal const string PluginVersion = "0.1.0";
+    internal const string PluginVersion = "0.1.1";
     private const string ConfigurationManagerGuid = "com.bepis.bepinex.configurationmanager";
 
     private static Plugin _instance;
@@ -70,7 +70,7 @@ internal sealed class Plugin : BaseUnityPlugin
         if (_watcherRebindPending)
         {
             _watcherRebindPending = false;
-            _watcher.Bind(AliasFilePath, _aliases != null && _settings.ReloadOnChange.Value);
+            RebindWatcher();
         }
 
         if (_watcher.Poll())
@@ -265,16 +265,30 @@ internal sealed class Plugin : BaseUnityPlugin
             _aliases = new AliasFileStore(path);
             _fallbackWarnings.Clear();
             ReloadAliases("Configuration");
-            _watcher.Bind(path, _settings.ReloadOnChange.Value);
+            RebindWatcher();
         }
         catch (Exception exception)
         {
             _aliases = null;
-            _watcher.Bind(string.Empty, false);
+            _watcher.TryBind(string.Empty, false, out _);
             EditorStatus = $"Alias file configuration failed: {exception.Message}";
             Logger.LogError(EditorStatus);
             _refreshPending = true;
         }
+    }
+
+    private void RebindWatcher()
+    {
+        if (_watcher.TryBind(
+            AliasFilePath,
+            _aliases != null && _settings.ReloadOnChange.Value,
+            out var error))
+        {
+            return;
+        }
+
+        EditorStatus = $"Alias file watching failed: {error}";
+        Logger.LogError(EditorStatus);
     }
 
     private void ReloadAliases(string reason)
