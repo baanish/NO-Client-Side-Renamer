@@ -9,7 +9,8 @@ process-wide.
 
 Requirements
 
-- Nuclear Option, see the documentation for recorded in-game test versions
+- Nuclear Option; historical v0.1.0 test versions are recorded here:
+  https://github.com/baanish/NO-Client-Side-Renamer/blob/main/docs/release-notes/v0.1.0.md#test-status
 - BepInEx 5, tested with 5.4.23.4
 - BepInEx Configuration Manager, optional for the in-game editor
 

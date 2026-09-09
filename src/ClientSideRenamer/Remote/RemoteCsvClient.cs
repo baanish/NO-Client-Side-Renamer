@@ -77,7 +77,8 @@ internal sealed class RemoteCsvClient : IDisposable
             using var abortResponse = deadline.Token.Register(response.Dispose);
             if (response.StatusCode != HttpStatusCode.OK)
                 throw new HttpRequestException("Remote CSV endpoint did not return HTTP 200.");
-            if (response.Content == null || response.Content.Headers.ContentEncoding.Count != 0
+            if (response.Content == null || response.Content.Headers.ContentEncoding.Any(
+                    encoding => !string.Equals(encoding, "identity", StringComparison.OrdinalIgnoreCase))
                 || response.Content.Headers.ContentLength > RemoteCsvParser.MaximumBytes)
                 throw new HttpRequestException("Remote CSV response is unsupported or too large.");
 

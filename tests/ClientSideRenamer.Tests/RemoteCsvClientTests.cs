@@ -134,6 +134,46 @@ public sealed class RemoteCsvClientTests
         Assert.Equal(0, stream.BytesRead);
     }
 
+    [Theory]
+    [InlineData("identity", null)]
+    [InlineData("IDENTITY", null)]
+    [InlineData("identity", "identity")]
+    public async Task Identity_content_encoding_is_accepted(string encoding, string? secondEncoding)
+    {
+        using var handler = new StubHandler((_, _) =>
+        {
+            var response = Response();
+            response.Content.Headers.ContentEncoding.Add(encoding);
+            if (secondEncoding != null)
+                response.Content.Headers.ContentEncoding.Add(secondEncoding);
+            return Task.FromResult(response);
+        });
+        using var client = new RemoteCsvClient(handler);
+
+        Assert.Equal(1, (await client.FetchAsync(Endpoint, "", CancellationToken.None)).Count);
+    }
+
+    [Theory]
+    [InlineData("gzip")]
+    [InlineData("br")]
+    [InlineData("unknown")]
+    [InlineData("identity, gzip")]
+    [InlineData("br, identity")]
+    public async Task Compressed_unknown_or_mixed_content_encoding_is_rejected(string encoding)
+    {
+        using var stream = new ResponseStream(10);
+        using var handler = new StubHandler((_, _) =>
+        {
+            var response = new HttpResponseMessage(HttpStatusCode.OK) { Content = new StreamContent(stream) };
+            response.Content.Headers.TryAddWithoutValidation("Content-Encoding", encoding);
+            return Task.FromResult(response);
+        });
+        using var client = new RemoteCsvClient(handler);
+
+        await Assert.ThrowsAsync<HttpRequestException>(() => client.FetchAsync(Endpoint, "", CancellationToken.None));
+        Assert.Equal(0, stream.BytesRead);
+    }
+
     [Fact]
     public async Task Caller_cancellation_reaches_body_reads()
     {

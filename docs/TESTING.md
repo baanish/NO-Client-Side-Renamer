@@ -4,7 +4,7 @@ This document separates v0.2.0 automated checks from earlier in-game observation
 
 ## v0.2.0 automated validation
 
-The Release build and all 133 tests pass. `dotnet format --verify-no-changes` and `git diff --check` pass. NuGet reported `NU1900` because its vulnerability metadata service was unavailable; dependency vulnerability status was not refreshed.
+The Release build and all 141 tests pass. `dotnet format --verify-no-changes` and `git diff --check` pass. NuGet reported `NU1900` because its vulnerability metadata service was unavailable; dependency vulnerability status was not refreshed.
 
 New tests cover CSV schema and quoting, UTF-8 errors, duplicate IDs, character and size boundaries, streamed responses without a declared length, non-200 responses, header injection, token redaction, cancellation, and the full ten-second body deadline. The production request's certificate callback accepts only `SslPolicyErrors.None`; tests invoke it with an `HttpWebRequest` sender and pin rejection for every combination of the three error flags. A loopback TLS server with an untrusted certificate confirms that the configured .NET HTTP transport refuses the connection before sending the password. Direct adapter tests cover successful header and body forwarding, cancellation while awaiting headers, and connection cleanup after success or HTTP errors. Lifecycle tests cover last-valid retention, safe failure diagnostics, empty roster replacement, canceled and late responses. BepInEx configuration tests verify that URL/token edits disable fetching until re-enabled and that loading saved enabled settings preserves automatic startup fetching.
 
@@ -66,7 +66,7 @@ For a cached rerun without package restore:
 dotnet test .\tests\ClientSideRenamer.Tests\ClientSideRenamer.Tests.csproj --no-restore -p:GamePath='D:\SteamLibrary\steamapps\common\Nuclear Option'
 ```
 
-Current result: 133 passed, 0 failed, 0 skipped. The historical v0.1.1 suite contained 35 tests.
+Current result: 141 passed, 0 failed, 0 skipped. The historical v0.1.1 suite contained 35 tests.
 
 The tests cover:
 
