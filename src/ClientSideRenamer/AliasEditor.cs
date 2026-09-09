@@ -12,6 +12,7 @@ internal sealed class AliasEditor
     private ulong _loadedInputSteamId;
     private string _loadedInputSteamName = string.Empty;
     private string _aliasInput = string.Empty;
+    private string _loadedAlias = string.Empty;
     private string _playerSearch = string.Empty;
     private Vector2 _playerScroll;
 
@@ -27,6 +28,14 @@ internal sealed class AliasEditor
     {
         _loadedInputSteamId = 0;
         _loadedInputSteamName = string.Empty;
+    }
+
+    public void RefreshUneditedInputs()
+    {
+        if (_aliasInput == _loadedAlias)
+        {
+            ClearInputs();
+        }
     }
 
     public void Draw(ConfigEntryBase _)
@@ -49,8 +58,12 @@ internal sealed class AliasEditor
 
     private void DrawContents()
     {
-        GUILayout.Label($"Loaded: {_plugin.AliasCount} aliases");
+        GUILayout.Label($"Loaded: {_plugin.AliasCount} local aliases");
         GUILayout.Label($"File: {_plugin.AliasFilePath}");
+        foreach (var status in _plugin.RemoteStatuses)
+        {
+            GUILayout.Label(status);
+        }
 
         if (GUILayout.Button("Reload now", GUILayout.ExpandWidth(false)))
         {
@@ -177,6 +190,7 @@ internal sealed class AliasEditor
             _aliasInput = _plugin.TryGetAlias(steamId, originalName, out var currentAlias)
                 ? currentAlias
                 : string.Empty;
+            _loadedAlias = _aliasInput;
             _loadedInputSteamId = steamId;
             _loadedInputSteamName = originalName;
         }
@@ -192,7 +206,7 @@ internal sealed class AliasEditor
             _plugin.SaveAlias(steamId, originalName, _aliasInput);
         }
 
-        if (GUILayout.Button("Remove", GUILayout.ExpandWidth(false)))
+        if (GUILayout.Button("Remove local", GUILayout.ExpandWidth(false)))
         {
             if (_plugin.RemoveAlias(steamId, originalName))
             {

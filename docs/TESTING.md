@@ -1,6 +1,30 @@
 # Testing and validation
 
-This document records what v0.1.1 has demonstrated and what remains open. It does not treat a successful build or a screenshot from one client as proof of multiplayer isolation.
+This document separates v0.2.0 automated checks from earlier in-game observations. A successful build or a screenshot from one client does not prove multiplayer isolation.
+
+## v0.2.0 automated validation
+
+The Release build and all 133 tests pass. `dotnet format --verify-no-changes` and `git diff --check` pass. NuGet reported `NU1900` because its vulnerability metadata service was unavailable; dependency vulnerability status was not refreshed.
+
+New tests cover CSV schema and quoting, UTF-8 errors, duplicate IDs, character and size boundaries, streamed responses without a declared length, non-200 responses, header injection, token redaction, cancellation, and the full ten-second body deadline. The production request's certificate callback accepts only `SslPolicyErrors.None`; tests invoke it with an `HttpWebRequest` sender and pin rejection for every combination of the three error flags. A loopback TLS server with an untrusted certificate confirms that the configured .NET HTTP transport refuses the connection before sending the password. Direct adapter tests cover successful header and body forwarding, cancellation while awaiting headers, and connection cleanup after success or HTTP errors. Lifecycle tests cover last-valid retention, safe failure diagnostics, empty roster replacement, canceled and late responses. BepInEx configuration tests verify that URL/token edits disable fetching until re-enabled and that loading saved enabled settings preserves automatic startup fetching.
+
+Multiple-roster tests pin the eight-source cap, preserve the original config section, and verify separate tokens and enabled states. They cover roster priority regardless of completion order, fallback after clearing or emptying a source, isolated refresh failures, and combined unique aliases.
+
+These tests run on .NET 8. They load BepInEx configuration and Unity type metadata, but do not start Nuclear Option or run its Mono HTTP backend. The Release DLL reports version `0.2.0.0`; building does not install it into the game. Packages and publication still require the clean-commit procedure in [Releasing](RELEASING.md).
+
+Before release, check in the game with a controlled HTTPS endpoint:
+
+1. Configure a CSV and optional token, enable remote CSV, restart, and confirm one startup GET with the `PASSWORD` header and no query token. Repeat with an empty token and confirm that the header is absent.
+2. Confirm remote aliases appear in cache-aware displays and that local ID and name-only aliases take priority. Remove a local override and confirm the remote alias returns.
+3. Test a slow response while typing an alias in F1. The draft must survive both success and failure. Confirm that the token field is masked.
+4. Edit the endpoint while enabled, pausing at incomplete hostnames. Remote fetching must switch off without requesting those hostnames. Enable it only after the URL is complete.
+5. Disable remote CSV during a request. Its late response must not restore aliases. Repeat with General.Enabled, then re-enable and confirm a new fetch.
+6. Test invalid CSV, a wrong token, an unreachable endpoint, and an untrusted certificate. The game must remain responsive; failure must retain the current source's last valid roster or leave only local aliases after a fresh start. Confirm that failures show an exception type without exposing the token or URL.
+7. Run both existing vanilla-peer isolation scenarios below. Their earlier open status still applies to v0.2.0.
+
+Repeat with two enabled rosters containing one conflicting SteamID and one unique ID each. Delay roster 1 so roster 2 loads first, then confirm roster 1 takes priority when it arrives. Change or disable just roster 1 and confirm roster 2 remains active. Inspect each endpoint's request to confirm it receives only its own token. Restart and confirm both enabled rosters fetch without manual action.
+
+For the Mono TLS isolation check, use a controlled endpoint and a disposable sentinel token. First confirm a successful fetch with a trusted certificate. Repeat the untrusted-certificate test with a scratch plugin that sets a permissive `ServicePointManager.ServerCertificateValidationCallback`. The roster fetch must still fail before the endpoint receives HTTP request bytes. Restore the global callback and remove the scratch plugin afterward. Static inspection of the installed Mono assemblies confirms that the direct request-local callback takes precedence over the global callback and avoids the incompatible `HttpClientHandler` callback adapter; it does not replace this runtime check. The installed Mono transport also ignores `MaximumResponseHeadersLength`, so the requested 16 KiB header limit is not an enforced bound there.
 
 ## Status recorded on 2026-08-31
 
@@ -42,7 +66,7 @@ For a cached rerun without package restore:
 dotnet test .\tests\ClientSideRenamer.Tests\ClientSideRenamer.Tests.csproj --no-restore -p:GamePath='D:\SteamLibrary\steamapps\common\Nuclear Option'
 ```
 
-Current result: 35 passed, 0 failed, 0 skipped.
+Current result: 133 passed, 0 failed, 0 skipped. The historical v0.1.1 suite contained 35 tests.
 
 The tests cover:
 
@@ -61,7 +85,7 @@ The tests cover:
 - long Unicode player-label truncation;
 - watcher failure reporting and repeated disable and re-enable binding.
 
-The suite does not load BepInEx, Harmony, Steamworks, Unity, or Nuclear Option runtime objects. It does not cover configuration path resolution, watcher debounce, cache refresh, F1 behavior, game-version compatibility, or multiplayer isolation.
+The suite does not initialize Harmony, Steamworks, Unity game objects, or Nuclear Option. It does not cover configuration path resolution, watcher debounce, cache refresh, F1 rendering, game-version compatibility, or multiplayer isolation.
 
 NuGet may report `NU1900` when its vulnerability-audit service cannot be reached. That warning is separate from test execution; record it, but use the test summary to determine whether the suite ran.
 
@@ -149,10 +173,11 @@ Treat a newly created modded-client event that uses the old name as a display-co
 
 ## Release acceptance criteria
 
-v0.1.1 is ready for a wider test only when:
+v0.2.0 is ready for a wider test only when:
 
 - the focused automated suite passes;
 - a release build succeeds against the current installed game;
+- the remote startup, authentication, failure and reverse-transition checks above pass in-game;
 - both two-person scenarios pass;
 - each required modded-client surface resolves the alias for newly generated content;
 - the vanilla peer and network-visible server output retain the original Steam name on every surface and transition;

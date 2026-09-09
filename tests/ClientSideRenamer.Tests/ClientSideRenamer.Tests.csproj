@@ -19,5 +19,8 @@
 
   <ItemGroup>
     <ProjectReference Include="../../src/ClientSideRenamer/ClientSideRenamer.csproj" />
+    <Reference Include="BepInEx" HintPath="$(BepInExCorePath)/BepInEx.dll" />
+    <Reference Include="UnityEngine" HintPath="$(GameManagedPath)/UnityEngine.dll" />
+    <Reference Include="UnityEngine.CoreModule" HintPath="$(GameManagedPath)/UnityEngine.CoreModule.dll" />
   </ItemGroup>
 </Project>

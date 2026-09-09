@@ -2,6 +2,8 @@
 
 Use local callsigns for Nuclear Option players without changing their Steam identities. This BepInEx 5 plugin maps SteamID64 values to display aliases and applies them when the game resolves player names.
 
+v0.2.0 supports up to eight HTTPS CSV rosters, fetched automatically when the mod loads. Each has its own endpoint and optional `PASSWORD` request header. Local aliases take priority, followed by remote rosters in numbered order. See [Remote CSV setup](docs/USER_GUIDE.md#fetch-a-shared-csv-roster).
+
 > **v0.1.1 test status:** Remote aliases have been observed on the modded client's tactical map, HUD marker, aircraft MFD, scoreboard, and event notifications. The bounded editor has been observed with 28 players and is covered by 100-player tests. A vanilla peer has not confirmed isolation in either join direction. **Use this prerelease only for controlled testing, not ordinary multiplayer.**
 
 ## Install
@@ -15,7 +17,7 @@ The first run creates:
 - `BepInEx/config/com.baanish.nuclearoption.clientsiderenamer.cfg`
 - `BepInEx/config/ClientSideRenamer/aliases.json`
 
-The JSON file is created with two disabled, generic examples. No alias is active until you save a player in F1 or enable an entry in the file. Name-only mappings are exact and case-sensitive. Saving a player through the F1 editor creates a stable SteamID64 mapping.
+The JSON file is created with two disabled, generic examples. No alias is active until you save a player in F1, enable an entry in the file, or enable a remote CSV roster. Name-only mappings are exact and case-sensitive. Saving a player through the F1 editor creates a stable SteamID64 mapping.
 
 ## Add an alias in-game
 

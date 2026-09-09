@@ -110,7 +110,7 @@ internal static class AliasFileValidator
         return true;
     }
 
-    private static bool IsCanonicalSteamId64(string value)
+    internal static bool IsCanonicalSteamId64(string value)
     {
         return ulong.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed)
             && parsed > PublicIndividualSteamIdBase
