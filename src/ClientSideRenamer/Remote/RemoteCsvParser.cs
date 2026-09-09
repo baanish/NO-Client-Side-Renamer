@@ -37,33 +37,46 @@ internal static class RemoteCsvParser
             || !string.Equals(header[1 - nameColumn], "SteamID", StringComparison.OrdinalIgnoreCase))
             throw InvalidCsv();
 
-        var aliases = new Dictionary<string, string>(StringComparer.Ordinal);
+        var aliasesById = new Dictionary<string, string>(StringComparer.Ordinal);
+        var aliasesByName = new Dictionary<string, string>(StringComparer.Ordinal);
         while (position < text.Length)
         {
-            if (aliases.Count >= MaximumRows)
+            if (aliasesById.Count + aliasesByName.Count >= MaximumRows)
                 throw InvalidCsv();
 
             var row = ReadRow(text, ref position);
             var name = row[nameColumn];
-            var steamId = row[1 - nameColumn];
-            if (string.IsNullOrWhiteSpace(name) || !AliasFileValidator.IsCanonicalSteamId64(steamId))
+            var identifier = row[1 - nameColumn];
+            ValidateName(name);
+            ValidateName(identifier);
+            // Digit-only identifiers are reserved for canonical SteamID64 values.
+            var numeric = true;
+            foreach (var character in identifier)
+                numeric &= character >= '0' && character <= '9';
+            if (numeric && !AliasFileValidator.IsCanonicalSteamId64(identifier))
                 throw InvalidCsv();
 
-            for (var index = 0; index < name.Length; index++)
-            {
-                var category = CharUnicodeInfo.GetUnicodeCategory(name, index);
-                if (category == UnicodeCategory.Control || category == UnicodeCategory.Format
-                    || category == UnicodeCategory.LineSeparator || category == UnicodeCategory.ParagraphSeparator
-                    || name[index] == '<' || name[index] == '>')
-                    throw InvalidCsv();
-            }
-
-            if (aliases.ContainsKey(steamId))
+            var aliases = numeric ? aliasesById : aliasesByName;
+            if (aliases.ContainsKey(identifier))
                 throw InvalidCsv();
-            aliases.Add(steamId, name);
+            aliases.Add(identifier, name);
         }
 
-        return new AliasSnapshot(aliases, new Dictionary<string, string>(StringComparer.Ordinal));
+        return new AliasSnapshot(aliasesById, aliasesByName);
+    }
+
+    private static void ValidateName(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            throw InvalidCsv();
+        for (var index = 0; index < name.Length; index++)
+        {
+            var category = CharUnicodeInfo.GetUnicodeCategory(name, index);
+            if (category == UnicodeCategory.Control || category == UnicodeCategory.Format
+                || category == UnicodeCategory.LineSeparator || category == UnicodeCategory.ParagraphSeparator
+                || name[index] == '<' || name[index] == '>')
+                throw InvalidCsv();
+        }
     }
 
     private static string[] ReadRow(string text, ref int position)

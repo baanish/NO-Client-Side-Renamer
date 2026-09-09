@@ -1,6 +1,6 @@
 # Design and constraints
 
-This document records the v0.2.0 design for reviewers. It separates accepted implementation decisions from inferred rationale, provisional behavior, and release gates.
+This document records the v0.2.1 design for reviewers. It separates accepted implementation decisions from inferred rationale, provisional behavior, and release gates.
 
 ## Goals
 
@@ -11,7 +11,7 @@ This document records the v0.2.0 design for reviewers. It separates accepted imp
 - Preserve the last valid mapping when an edit is malformed.
 - Refresh existing cache-aware displays without reconnecting.
 
-## Non-goals for v0.2.0
+## Non-goals for v0.2.1
 
 - Changing Steam authentication, Steam persona names, or synced player IDs.
 - Synchronizing aliases between modded clients.
@@ -47,7 +47,7 @@ The 10-second cancellation deadline covers headers and body reads. The CSV body 
 
 [RemoteCsvParser.cs](../src/ClientSideRenamer/Remote/RemoteCsvParser.cs) accepts only UTF-8 CSV containing `PlayerName` and `SteamID`. It constructs string dictionaries without invoking JSON deserialization, reflection, script execution, process creation or file writes. Every record must pass validation before the snapshot replaces the previous one. Strict length and character limits exclude rich-text tags and multiline names; these limits do not change trusted local JSON behavior.
 
-[RemoteRoster.cs](../src/ClientSideRenamer/Remote/RemoteRoster.cs) performs downloads on a worker and publishes snapshots only when polled from Unity `Update`. Canceled or replaced requests cannot publish late results. Failed refreshes retain the last valid snapshot for the current source. Disabling the feature or changing its configuration clears that snapshot. No remote cache is persisted. [Plugin.cs](../src/ClientSideRenamer/Plugin.cs) starts the fetch on load and resolves local ID aliases, local name fallbacks, then remote ID aliases.
+[RemoteRoster.cs](../src/ClientSideRenamer/Remote/RemoteRoster.cs) performs downloads on a worker and publishes snapshots only when polled from Unity `Update`. Canceled or replaced requests cannot publish late results. Failed refreshes retain the last valid snapshot for the current source. Disabling the feature or changing its configuration clears that snapshot. No remote cache is persisted. [Plugin.cs](../src/ClientSideRenamer/Plugin.cs) starts the fetch on load and resolves local ID aliases, local name fallbacks, then remote aliases. Each remote roster tries the SteamID64 before the exact original Steam name. ASCII digit-only CSV identifiers are reserved for canonical SteamID64; all other identifiers are names and receive the same validation as display aliases. This preserves spelling and avoids guessing whether a Steam display name resembles a number.
 
 [RemoteRosterSet.cs](../src/ClientSideRenamer/Remote/RemoteRosterSet.cs) owns up to eight independent rosters. Each source has its own token, cancellation and last-valid snapshot. Local aliases win; remote conflicts use the lowest-numbered loaded source, independent of completion order. A lower-priority source can supply an alias while an earlier source is still pending. Tests pin this policy, failure isolation and fallback after a source is cleared. The eight-source cap bounds concurrent requests and retained data under the per-response limits. The original `Remote CSV` config section remains slot 1, with `Remote CSV 2` through `Remote CSV 8` added alongside it.
 

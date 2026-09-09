@@ -29,14 +29,14 @@ public sealed class RemoteRosterSetTests
 
         secondResponse.SetResult(Snapshot(FirstSteamId, "Second roster"));
         await PollUntilCompleted(rosters[1]);
-        Assert.True(rosters.TryResolve(FirstSteamId, out var firstResolved));
+        Assert.True(rosters.TryResolve(FirstSteamId, "Original", out var firstResolved));
         Assert.Equal("Second roster", firstResolved);
 
         firstResponse.SetResult(Snapshot(FirstSteamId, "First roster"));
         await PollUntilCompleted(rosters[0]);
 
         Assert.Equal(2, rosters.Count);
-        Assert.True(rosters.TryResolve(FirstSteamId, out var finalResolved));
+        Assert.True(rosters.TryResolve(FirstSteamId, "Original", out var finalResolved));
         Assert.Equal("First roster", finalResolved);
     }
 
@@ -51,7 +51,7 @@ public sealed class RemoteRosterSetTests
 
         rosters[0].Clear();
 
-        Assert.True(rosters.TryResolve(FirstSteamId, out var resolved));
+        Assert.True(rosters.TryResolve(FirstSteamId, "Original", out var resolved));
         Assert.Equal("Second roster", resolved);
     }
 
@@ -73,9 +73,9 @@ public sealed class RemoteRosterSetTests
         failedResponse.SetException(new IOException("Untrusted server error"));
         await PollUntilCompleted(rosters[0]);
 
-        Assert.True(rosters.TryResolve(FirstSteamId, out var retained));
+        Assert.True(rosters.TryResolve(FirstSteamId, "Original", out var retained));
         Assert.Equal("Retained pilot", retained);
-        Assert.True(rosters.TryResolve(SecondSteamId, out var updated));
+        Assert.True(rosters.TryResolve(SecondSteamId, "Original", out var updated));
         Assert.Equal("Updated pilot", updated);
     }
 
@@ -93,7 +93,7 @@ public sealed class RemoteRosterSetTests
         response.SetResult(AliasSnapshot.Empty);
         await PollUntilCompleted(rosters[0]);
 
-        Assert.True(rosters.TryResolve(FirstSteamId, out var resolved));
+        Assert.True(rosters.TryResolve(FirstSteamId, "Original", out var resolved));
         Assert.Equal("Second roster", resolved);
     }
 
@@ -111,12 +111,39 @@ public sealed class RemoteRosterSetTests
         await PollUntilCompleted(rosters[0]);
         await PollUntilCompleted(rosters[1]);
 
-        Assert.True(rosters.TryResolve(FirstSteamId, out var first));
+        Assert.True(rosters.TryResolve(FirstSteamId, "Original", out var first));
         Assert.Equal("First pilot", first);
-        Assert.True(rosters.TryResolve(SecondSteamId, out var second));
+        Assert.True(rosters.TryResolve(SecondSteamId, "Original", out var second));
         Assert.Equal("Second pilot", second);
-        Assert.False(rosters.TryResolve("76561198000000003", out var missing));
+        Assert.False(rosters.TryResolve("76561198000000003", "Original", out var missing));
         Assert.Equal(string.Empty, missing);
+    }
+
+    [Fact]
+    public async Task Earlier_name_match_wins_over_later_id_and_clear_restores_the_later_alias()
+    {
+        using var rosters = new RemoteRosterSet(2);
+        rosters[0].Refresh(_ => Task.FromResult(RemoteCsvParser.Parse(
+            System.Text.Encoding.UTF8.GetBytes("PlayerName,SteamID\nName alias,baanish"))));
+        rosters[1].Refresh(_ => Task.FromResult(Snapshot(FirstSteamId, "ID alias")));
+        await PollUntilCompleted(rosters[0]);
+        await PollUntilCompleted(rosters[1]);
+
+        Assert.True(rosters.TryResolve(FirstSteamId, "baanish", out var alias));
+        Assert.Equal("Name alias", alias);
+        Assert.True(rosters.TryResolve(FirstSteamId, "Baanish", out alias));
+        Assert.Equal("ID alias", alias);
+
+        rosters[0].Refresh(_ => Task.FromException<AliasSnapshot>(new IOException("Failed")));
+        await PollUntilCompleted(rosters[0]);
+        Assert.True(rosters.TryResolve(FirstSteamId, "baanish", out alias));
+        Assert.Equal("Name alias", alias);
+
+        rosters[0].Clear();
+        Assert.True(rosters.TryResolve(FirstSteamId, "baanish", out alias));
+        Assert.Equal("ID alias", alias);
+        rosters[1].Clear();
+        Assert.False(rosters.TryResolve(FirstSteamId, "baanish", out _));
     }
 
     private static AliasSnapshot Snapshot(string steamId, string displayName) => new(

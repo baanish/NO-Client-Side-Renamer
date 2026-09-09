@@ -17,12 +17,12 @@ internal sealed class RemoteRosterSet : IDisposable
     internal int Count => _rosters.Length;
     internal RemoteRoster this[int index] => _rosters[index];
 
-    internal bool TryResolve(string steamId, out string displayName)
+    internal bool TryResolve(string steamId, string steamName, out string displayName)
     {
         // Configured slot order decides conflicts, regardless of request completion order.
         foreach (var roster in _rosters)
         {
-            if (roster.Current.TryResolve(steamId, null, out displayName))
+            if (roster.Current.TryResolve(steamId, steamName, out displayName))
                 return true;
         }
 

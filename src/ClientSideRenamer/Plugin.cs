@@ -14,7 +14,7 @@ internal sealed class Plugin : BaseUnityPlugin
 {
     internal const string PluginGuid = "com.baanish.nuclearoption.clientsiderenamer";
     internal const string PluginName = "Nuclear Option Client-Side Renamer";
-    internal const string PluginVersion = "0.2.0";
+    internal const string PluginVersion = "0.2.1";
     private const string ConfigurationManagerGuid = "com.bepis.bepinex.configurationmanager";
 
     private static Plugin _instance;
@@ -304,7 +304,7 @@ internal sealed class Plugin : BaseUnityPlugin
 
         if (!local.TryResolve(string.Empty, steamName, out displayName))
         {
-            return _remote.TryResolve(id, out displayName);
+            return _remote.TryResolve(id, steamName, out displayName);
         }
 
         if (logFallback && _fallbackWarnings.Add(steamId))

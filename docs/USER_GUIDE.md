@@ -1,6 +1,6 @@
 # User guide
 
-This guide covers Nuclear Option Client-Side Renamer v0.2.0. The mod is intended for controlled testing only. Vanilla-peer isolation has not passed in either join direction. See [Testing](TESTING.md).
+This guide covers Nuclear Option Client-Side Renamer v0.2.1. The mod is intended for controlled testing only. Vanilla-peer isolation has not passed in either join direction. See [Testing](TESTING.md).
 
 ## Requirements
 
@@ -115,7 +115,7 @@ ExamplePilot | Viper 1-1,76561198000000001
 "Pilot, Two",76561198000000002
 ```
 
-Column order can be reversed and header names are case-insensitive. Use full decimal SteamID64 values, not Discord IDs or spreadsheet scientific notation. Quotes around fields and doubled quotes inside quoted fields are supported. Save the spreadsheet as UTF-8 CSV. A UTF-8 byte-order mark is accepted.
+Column order can be reversed and header names are case-insensitive. In `SteamID`, enter a full decimal SteamID64 or the original Steam display name, such as `baanish`. Text matches exactly, including capitalization and spaces. A name can match multiple players and stops matching if they change it; use SteamID64 for a stable identity. Digit-only values are reserved for canonical SteamID64. Other text is treated as a name, without profile-URL lookup or numeric conversion. Quotes around fields and doubled quotes inside quoted fields are supported. Save the spreadsheet as UTF-8 CSV. A UTF-8 byte-order mark is accepted.
 
 Configure up to eight independent sources. In F1, use **Remote CSV** for roster 1 and **Remote CSV 2** through **Remote CSV 8** for additional rosters. Each section has its own **Enabled**, **Url** and **Password**. Enter its URL and optional token, then enable that roster. Existing single-roster settings remain roster 1.
 
@@ -143,13 +143,13 @@ PASSWORD: your-roster-token
 
 An empty value omits the header. This is a shared token, with no login exchange. The endpoint owner must check it. Use a dedicated printable ASCII token of at most 1,024 characters. The field is masked in F1, but the token is plain text in the BepInEx config. Keep that file out of shared screenshots, backups and support uploads. Server administrators should redact the `PASSWORD` header from their request logs. Do not put secrets in the URL.
 
-All enabled local aliases, including name-only fallbacks, take priority over remote aliases. If a SteamID appears in multiple rosters, the lowest-numbered loaded roster wins: roster 1 before roster 2, and so on. Download completion order does not change that priority. While an earlier roster is still loading, a later roster's alias can apply temporarily. Disabling or emptying the earlier roster reveals the next available match. Duplicate IDs within one CSV still reject that CSV.
+All enabled local aliases, including name-only fallbacks, take priority over remote aliases. If a player matches multiple rosters, the lowest-numbered loaded roster wins: roster 1 before roster 2, and so on. Download completion order does not change that priority. While an earlier roster is still loading, a later roster's alias can apply temporarily. Disabling or emptying the earlier roster reveals the next available match. Within one roster, an ID match wins over a name match. Duplicate IDs or exact Steam names within one CSV reject that CSV.
 
 **Save** creates a local override. **Remove local** removes it and may reveal a remote alias again. Disabled local rows do not suppress remote aliases. Disable every remote roster to use only local mappings. Turning **General / Enabled** off cancels all fetches, clears the retained remote rosters and restores original names; turning it back on fetches every enabled roster again. A failed fetch after re-enabling has no previous remote roster to restore.
 
 Downloads stay in memory and never overwrite `aliases.json`. A failed refresh retains only that source's last valid roster during that game run. Other rosters continue loading and working. After a restart, a failed source contributes no aliases; local aliases and other valid rosters remain available. There is no disk cache or automatic retry. Changing a URL or token clears that source's old roster even if its replacement later fails. A valid header-only CSV clears that roster alone. Background completion preserves unsaved alias edits in F1.
 
-The full CSV is rejected if any row is invalid. Each roster is limited to a 1 MiB CSV body, 10,000 aliases and 128 UTF-16 code units per name. The eight-roster cap bounds simultaneous downloads and retained data. Names cannot be blank or contain control characters, invisible formatting characters, line separators, or `<` and `>` markup. IDs must be unique canonical public individual SteamID64 values. Extra columns, blank records and multiline fields are rejected. Each request has a 10-second deadline and rejects redirects and compressed responses. The HTTPS certificate must validate normally, even if another mod installs a permissive global certificate callback. System proxies are not used. Unity Mono does not enforce the requested 16 KiB response-header limit, so the body limit does not bound memory used for response headers.
+The full CSV is rejected if any row is invalid. Each roster is limited to a 1 MiB CSV body, 10,000 aliases and 128 UTF-16 code units per name. The eight-roster cap bounds simultaneous downloads and retained data. Names cannot be blank or contain control characters, invisible formatting characters, line separators, or `<` and `>` markup. Digit-only identifiers must be unique canonical public individual SteamID64 values. Text identifiers use the same name limits and must be unique with case-sensitive comparison. Extra columns, blank records and multiline fields are rejected. Each request has a 10-second deadline and rejects redirects and compressed responses. The HTTPS certificate must validate normally, even if another mod installs a permissive global certificate callback. System proxies are not used. Unity Mono does not enforce the requested 16 KiB response-header limit, so the body limit does not bound memory used for response headers.
 
 F1 shows a separate numbered status and count for each configured roster. Tokens belong only to their respective endpoints. Fetch failures report the exception type without its message, URL, token or response body. This helps distinguish invalid input from transport or runtime failures. Check the roster owner's endpoint and server logs if the request fails. Remote names remain untrusted display text; each roster owner can change what names you see, and its endpoint can see your IP address and request timing. The mod uploads no player roster or Steam IDs.
 
@@ -195,7 +195,7 @@ Fix the file, save it, and wait for automatic reload or select **Reload now**. T
 
 ## Known limits
 
-- Vanilla-peer isolation is unproven when joining and hosting. Do not use v0.2.0 for ordinary multiplayer.
+- Vanilla-peer isolation is unproven when joining and hosting. Do not use v0.2.1 for ordinary multiplayer.
 - Aliases may appear in host-local logs, ban-list labels, and local third-party recordings. This does not by itself mean a vanilla peer received the alias.
 - Lobby-browser titles are not renamed.
 - The F1 roster excludes zero-ID entries, and spectator coverage is unverified.
