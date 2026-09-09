@@ -31,6 +31,7 @@ internal sealed class RemoteCsvClient : IDisposable
             request.Credentials = null;
             request.Proxy = null;
             request.AutomaticDecompression = DecompressionMethods.None;
+            request.Headers[HttpRequestHeader.AcceptEncoding] = "identity";
             request.MaximumResponseHeadersLength = 16;
             request.KeepAlive = false;
             // Unity Mono's HttpClientHandler callback adapter casts an HttpWebRequest sender to string.

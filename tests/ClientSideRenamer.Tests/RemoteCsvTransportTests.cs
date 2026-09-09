@@ -86,6 +86,7 @@ public sealed class RemoteCsvTransportTests
         Assert.Contains("GET /roster.csv HTTP/1.1\r\n", requestHeaders);
         Assert.Contains("Accept: text/csv\r\n", requestHeaders);
         Assert.Contains("PASSWORD: private-roster-token\r\n", requestHeaders);
+        Assert.Contains("Accept-Encoding: identity\r\n", requestHeaders);
         await WriteAsync(stream,
             "HTTP/1.1 200 OK\r\nContent-Length: 4\r\nContent-Encoding: identity\r\n\r\nbody",
             deadline.Token);
