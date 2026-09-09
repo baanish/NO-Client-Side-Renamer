@@ -1,13 +1,17 @@
 using BepInEx.Configuration;
+using ClientSideRenamer.Remote;
 
 namespace ClientSideRenamer;
 
 internal sealed class PluginConfig
 {
+    public const int MaximumRemoteRosters = 8;
+
     public ConfigEntry<bool> Enabled { get; }
     public ConfigEntry<string> AliasFile { get; }
     public ConfigEntry<bool> ReloadOnChange { get; }
     public ConfigEntry<string> AliasEditor { get; }
+    public IReadOnlyList<RemoteRosterConfig> RemoteRosters { get; }
 
     public PluginConfig(ConfigFile config, Action<ConfigEntryBase> drawAliasEditor)
     {
@@ -31,6 +35,13 @@ internal sealed class PluginConfig
             true,
             "Reload aliases after the JSON file changes."
         );
+
+        var remoteRosters = new RemoteRosterConfig[MaximumRemoteRosters];
+        for (var index = 0; index < remoteRosters.Length; index++)
+        {
+            remoteRosters[index] = new RemoteRosterConfig(config, index == 0 ? "Remote CSV" : $"Remote CSV {index + 1}");
+        }
+        RemoteRosters = Array.AsReadOnly(remoteRosters);
 
         AliasEditor = config.Bind(
             "Alias editor",

@@ -2,6 +2,7 @@ using System.Globalization;
 using BepInEx;
 using BepInEx.Logging;
 using ClientSideRenamer.Aliases;
+using ClientSideRenamer.Remote;
 using HarmonyLib;
 
 namespace ClientSideRenamer;
@@ -13,13 +14,14 @@ internal sealed class Plugin : BaseUnityPlugin
 {
     internal const string PluginGuid = "com.baanish.nuclearoption.clientsiderenamer";
     internal const string PluginName = "Nuclear Option Client-Side Renamer";
-    internal const string PluginVersion = "0.1.1";
+    internal const string PluginVersion = "0.2.1";
     private const string ConfigurationManagerGuid = "com.bepis.bepinex.configurationmanager";
 
     private static Plugin _instance;
 
     private readonly ReloadWatcher _watcher = new();
     private readonly HashSet<ulong> _fallbackWarnings = new();
+    private readonly RemoteRosterSet _remote = new(PluginConfig.MaximumRemoteRosters);
 
     private PluginConfig _settings;
     private AliasFileStore _aliases;
@@ -28,11 +30,26 @@ internal sealed class Plugin : BaseUnityPlugin
     private bool _reconfigurePending;
     private bool _watcherRebindPending;
     private bool _refreshPending;
+    private readonly bool[] _remoteReconfigurePending = new bool[PluginConfig.MaximumRemoteRosters];
 
     internal new ManualLogSource Logger => base.Logger;
     internal int AliasCount => _aliases?.Current.Count ?? 0;
     internal string AliasFilePath => _aliases?.FilePath ?? "[not loaded]";
     internal string EditorStatus { get; private set; } = string.Empty;
+    internal IEnumerable<string> RemoteStatuses
+    {
+        get
+        {
+            for (var index = 0; index < _remote.Count; index++)
+            {
+                var source = _settings.RemoteRosters[index];
+                if (source.Enabled.Value || !string.IsNullOrWhiteSpace(source.Url.Value))
+                {
+                    yield return $"Roster {index + 1}: {_remote[index].Status}";
+                }
+            }
+        }
+    }
 
     private void Awake()
     {
@@ -43,6 +60,10 @@ internal sealed class Plugin : BaseUnityPlugin
         _settings.Enabled.SettingChanged += OnEnabledChanged;
         _settings.AliasFile.SettingChanged += OnAliasFileChanged;
         _settings.ReloadOnChange.SettingChanged += OnReloadOnChangeChanged;
+        foreach (var source in _settings.RemoteRosters)
+        {
+            source.Enabled.SettingChanged += OnRemoteSettingChanged;
+        }
 
         ReconfigureAliasFile();
 
@@ -50,6 +71,10 @@ internal sealed class Plugin : BaseUnityPlugin
         {
             _harmony = new Harmony(PluginGuid);
             _harmony.PatchAll();
+            for (var index = 0; index < _remote.Count; index++)
+            {
+                RefreshRemote(index);
+            }
             Logger.LogInfo($"{PluginName} {PluginVersion} loaded with {AliasCount} aliases.");
         }
         catch (Exception exception)
@@ -61,6 +86,26 @@ internal sealed class Plugin : BaseUnityPlugin
 
     private void Update()
     {
+        for (var index = 0; index < _remote.Count; index++)
+        {
+            var roster = _remote[index];
+            if (_remoteReconfigurePending[index])
+            {
+                _remoteReconfigurePending[index] = false;
+                roster.Clear();
+                _refreshPending = true;
+                _editor.RefreshUneditedInputs();
+                RefreshRemote(index);
+            }
+
+            if (roster.Poll())
+            {
+                Logger.LogInfo($"Roster {index + 1}: {roster.Status}");
+                _editor.RefreshUneditedInputs();
+                _refreshPending = true;
+            }
+        }
+
         if (_reconfigurePending)
         {
             _reconfigurePending = false;
@@ -99,9 +144,14 @@ internal sealed class Plugin : BaseUnityPlugin
             _settings.Enabled.SettingChanged -= OnEnabledChanged;
             _settings.AliasFile.SettingChanged -= OnAliasFileChanged;
             _settings.ReloadOnChange.SettingChanged -= OnReloadOnChangeChanged;
+            foreach (var source in _settings.RemoteRosters)
+            {
+                source.Enabled.SettingChanged -= OnRemoteSettingChanged;
+            }
         }
 
         _watcher.Dispose();
+        _remote.Dispose();
         _harmony?.UnpatchSelf();
 
         if (_instance == this)
@@ -130,6 +180,13 @@ internal sealed class Plugin : BaseUnityPlugin
     internal void ReloadFromEditor()
     {
         ReloadAliases("Manual reload");
+        for (var index = 0; index < _remote.Count; index++)
+        {
+            if (!_remoteReconfigurePending[index])
+            {
+                RefreshRemote(index);
+            }
+        }
     }
 
     internal void SaveAlias(ulong steamId, string steamName, string displayName)
@@ -185,6 +242,7 @@ internal sealed class Plugin : BaseUnityPlugin
 
         _fallbackWarnings.Remove(steamId);
         EditorStatus = $"Saved alias for {steamName} ({id}).";
+        _editor.ClearInputs();
         _refreshPending = true;
     }
 
@@ -218,7 +276,8 @@ internal sealed class Plugin : BaseUnityPlugin
         }
 
         _fallbackWarnings.Remove(steamId);
-        EditorStatus = $"Removed alias for {steamName} ({id}).";
+        EditorStatus = $"Removed local alias for {steamName} ({id}). Remote aliases still apply when enabled.";
+        _editor.ClearInputs();
         _refreshPending = true;
         return true;
     }
@@ -231,20 +290,21 @@ internal sealed class Plugin : BaseUnityPlugin
     private bool TryResolve(ulong steamId, string steamName, bool logFallback, out string displayName)
     {
         displayName = string.Empty;
-        if (_aliases == null || steamId == 0)
+        if (steamId == 0)
         {
             return false;
         }
 
         var id = steamId.ToString(CultureInfo.InvariantCulture);
-        if (_aliases.Current.TryResolve(id, null, out displayName))
+        var local = _aliases?.Current ?? AliasSnapshot.Empty;
+        if (local.TryResolve(id, null, out displayName))
         {
             return true;
         }
 
-        if (!_aliases.Current.TryResolve(string.Empty, steamName, out displayName))
+        if (!local.TryResolve(string.Empty, steamName, out displayName))
         {
-            return false;
+            return _remote.TryResolve(id, steamName, out displayName);
         }
 
         if (logFallback && _fallbackWarnings.Add(steamId))
@@ -335,6 +395,36 @@ internal sealed class Plugin : BaseUnityPlugin
     private void OnEnabledChanged(object sender, EventArgs eventArgs)
     {
         _refreshPending = true;
+        Array.Fill(_remoteReconfigurePending, true);
+    }
+
+    private void OnRemoteSettingChanged(object sender, EventArgs eventArgs)
+    {
+        for (var index = 0; index < _settings.RemoteRosters.Count; index++)
+        {
+            if (ReferenceEquals(sender, _settings.RemoteRosters[index].Enabled))
+            {
+                _remoteReconfigurePending[index] = true;
+                break;
+            }
+        }
+    }
+
+    private void RefreshRemote(int index)
+    {
+        var source = _settings.RemoteRosters[index];
+        if (!_settings.Enabled.Value || !source.Enabled.Value)
+        {
+            return;
+        }
+
+        var endpoint = source.Url.Value;
+        var password = source.Password.Value;
+        _remote[index].Refresh(async token =>
+        {
+            using var client = new RemoteCsvClient();
+            return await client.FetchAsync(endpoint, password, token).ConfigureAwait(false);
+        });
     }
 
     private void OnAliasFileChanged(object sender, EventArgs eventArgs)

@@ -1,6 +1,6 @@
 # Design and constraints
 
-This document records the v0.1.1 design for reviewers. It separates accepted implementation decisions from inferred rationale, provisional behavior, and release gates.
+This document records the v0.2.1 design for reviewers. It separates accepted implementation decisions from inferred rationale, provisional behavior, and release gates.
 
 ## Goals
 
@@ -11,7 +11,7 @@ This document records the v0.1.1 design for reviewers. It separates accepted imp
 - Preserve the last valid mapping when an edit is malformed.
 - Refresh existing cache-aware displays without reconnecting.
 
-## Non-goals for v0.1.1
+## Non-goals for v0.2.1
 
 - Changing Steam authentication, Steam persona names, or synced player IDs.
 - Synchronizing aliases between modded clients.
@@ -34,6 +34,24 @@ F1 Save   -> validate -> file replace -> snapshot -> cache refresh
 ```
 
 The plugin changes one resolved name and leaves downstream UI composition to the game. The same central hook also means every caller in the process can observe the alias.
+
+## Decision: treat the remote roster as untrusted display data
+
+[RemoteCsvClient.cs](../src/ClientSideRenamer/Remote/RemoteCsvClient.cs) fetches only a user-configured HTTPS URL. Remote fetching is off by default. The response cannot choose another URL or a file path. The client disables redirects, cookies, ambient credentials, proxies and automatic decompression. A nonempty configured token goes in the `PASSWORD` header; it is masked in the editor but stored as plain text in BepInEx config.
+
+The transport uses a request-local `HttpWebRequest` certificate callback that accepts only error-free platform validation. This avoids the installed Mono runtime's incompatible `HttpClientHandler` callback adapter and prevents a permissive global callback from granting trust. Each request uses its own connection group with keep-alive disabled, so it cannot reuse a connection another component accepted under weaker validation.
+
+Editing a URL or token disables that source in [RemoteRosterConfig.cs](../src/ClientSideRenamer/Remote/RemoteRosterConfig.cs) until the user re-enables it. Text fields emit partial edits, so automatic fetching during typing could send an existing token to an unfinished hostname. Saved enabled settings still fetch on mod load.
+
+The 10-second cancellation deadline covers headers and body reads. The CSV body is capped at 1 MiB, including streams with no declared length. The client also requests a 16 KiB response-header limit, but the installed Unity Mono handler stores that setting without enforcing it. The header limit is therefore not a guaranteed memory bound on that runtime. Microsoft documents that [ResponseHeadersRead alone does not time out content reads](https://learn.microsoft.com/en-us/dotnet/api/system.net.http.httpcompletionoption), so the client carries the cancellation token through the body read.
+
+[RemoteCsvParser.cs](../src/ClientSideRenamer/Remote/RemoteCsvParser.cs) accepts only UTF-8 CSV containing `PlayerName` and `SteamID`. It constructs string dictionaries without invoking JSON deserialization, reflection, script execution, process creation or file writes. Every record must pass validation before the snapshot replaces the previous one. Strict length and character limits exclude rich-text tags and multiline names; these limits do not change trusted local JSON behavior.
+
+[RemoteRoster.cs](../src/ClientSideRenamer/Remote/RemoteRoster.cs) performs downloads on a worker and publishes snapshots only when polled from Unity `Update`. Canceled or replaced requests cannot publish late results. Failed refreshes retain the last valid snapshot for the current source. Disabling the feature or changing its configuration clears that snapshot. No remote cache is persisted. [Plugin.cs](../src/ClientSideRenamer/Plugin.cs) starts the fetch on load and resolves local ID aliases, local name fallbacks, then remote aliases. Each remote roster tries the SteamID64 before the exact original Steam name. ASCII digit-only CSV identifiers are reserved for canonical SteamID64; all other identifiers are names and receive the same validation as display aliases. This preserves spelling and avoids guessing whether a Steam display name resembles a number.
+
+[RemoteRosterSet.cs](../src/ClientSideRenamer/Remote/RemoteRosterSet.cs) owns up to eight independent rosters. Each source has its own token, cancellation and last-valid snapshot. Local aliases win; remote conflicts use the lowest-numbered loaded source, independent of completion order. A lower-priority source can supply an alias while an earlier source is still pending. Tests pin this policy, failure isolation and fallback after a source is cleared. The eight-source cap bounds concurrent requests and retained data under the per-response limits. The original `Remote CSV` config section remains slot 1, with `Remote CSV 2` through `Remote CSV 8` added alongside it.
+
+This removes executable content and filesystem writes from the download path. It is not a claim that the HTTP, TLS, Unity or game runtime has no vulnerabilities. A roster owner still controls display text and can observe requests. The feature does not upload local roster data, discover endpoints from match servers, or add a server component.
 
 ## Decision: patch the central Steam-name resolver
 
@@ -65,7 +83,7 @@ Every row must remain structurally valid, including disabled rows. Duplicate IDs
 
 The current schema accepts only canonical decimal SteamID64 values for public individual accounts. It rejects whitespace, leading zeros, other Steam account types, and out-of-range values.
 
-The validator requires a nonblank alias but sets no length or character policy. Any downstream truncation or sanitization belongs to the game and is not a contract of this plugin.
+The local JSON validator requires a nonblank alias but sets no length or character policy. Remote CSV has the stricter validation described above. Downstream truncation or sanitization of local aliases belongs to the game.
 
 ## Decision: keep a last-known-good snapshot
 

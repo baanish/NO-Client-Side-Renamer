@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.2.0 - unreleased
+
+- Added opt-in HTTPS CSV fetching automatically on mod load and when remote CSV is enabled.
+- Supported up to eight independent rosters with separate URLs, tokens and load status. Local aliases win, followed by the lowest-numbered loaded roster for that SteamID.
+- Added an optional `PASSWORD` request header with a masked F1 field. The token is stored as plain text in BepInEx config.
+- Kept remote aliases in memory, with local aliases taking priority and failed refreshes retaining the last valid roster.
+- Rejected redirects, invalid certificates, compressed responses, malformed CSV, duplicate IDs, markup and control characters. Each request has a 10-second deadline and a 1 MiB CSV body limit, with at most 10,000 aliases and 128 UTF-16 code units per name.
+- Canceled obsolete fetches and cleared only the affected roster when its source changes or it is disabled.
+- Disabled remote fetching during URL and token edits until explicitly re-enabled, preventing requests to unfinished URLs.
+
+The new startup fetch and display refresh still require in-game verification. The existing multiplayer isolation gates remain open.
+
 ## 0.1.1 pre-release - 2026-08-31
 
 ### Changed

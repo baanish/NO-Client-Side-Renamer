@@ -9,7 +9,8 @@ process-wide.
 
 Requirements
 
-- Nuclear Option 0.34.2, tested on Steam build 24724372
+- Nuclear Option; historical v0.1.0 test versions are recorded here:
+  https://github.com/baanish/NO-Client-Side-Renamer/blob/main/docs/release-notes/v0.1.0.md#test-status
 - BepInEx 5, tested with 5.4.23.4
 - BepInEx Configuration Manager, optional for the in-game editor
 
@@ -28,7 +29,8 @@ Start the game once. The plugin creates:
   BepInEx/config/ClientSideRenamer/aliases.json
 
 The first-run template contains two disabled, generic examples. No alias is
-active until you save a player in F1 or enable an entry in aliases.json.
+active until you save a player in F1, enable an entry in aliases.json, or
+enable a remote CSV roster.
 
 Open BepInEx Configuration Manager with F1 by default. Select a player from
 the scrollable Players list, or filter it with Search, then save the alias as
@@ -36,6 +38,22 @@ a SteamID64 mapping.
 
 Configuration Manager is optional. Without it, edit aliases.json directly.
 Automatic file watching is best effort. Restart the game if an edit is missed.
+
+Remote CSV
+
+Set the Remote CSV Url to a direct HTTPS endpoint returning UTF-8 CSV with
+PlayerName and SteamID columns. Enter an optional dedicated roster token in
+Password, then set Remote CSV Enabled to true. The mod fetches automatically
+on every load. Add sources under Remote CSV 2 through Remote CSV 8, each with
+its own URL, token and Enabled setting. Local aliases take priority, then the
+lowest-numbered loaded roster for each SteamID. Downloads stay in memory;
+one failing or disabled source does not clear the others.
+
+Password is sent in a PASSWORD request header, never added to the URL. It is
+masked in F1 but stored as plain text in the BepInEx config. Keep that file
+private. Redirects and invalid certificates are refused. Remote CSV names
+must be plain text, with unique SteamID64 values. Full setup and limits:
+https://github.com/baanish/NO-Client-Side-Renamer/blob/main/docs/USER_GUIDE.md#fetch-a-shared-csv-roster
 
 Known limits
 
